@@ -488,6 +488,12 @@ body {
     border-bottom: 1px solid rgba(255,255,255,0.06);
 }
 
+.code-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .code-lang {
     font-size: 12px;
     font-weight: 600;
@@ -496,7 +502,7 @@ body {
     letter-spacing: 0.05em;
 }
 
-.copy-btn {
+.copy-btn, .preview-btn {
     background: transparent;
     border: 1px solid rgba(255,255,255,0.12);
     border-radius: 6px;
@@ -515,6 +521,66 @@ body {
 .copy-btn.copied {
     color: var(--success);
     border-color: var(--success);
+}
+
+.preview-btn {
+    color: var(--accent);
+    border-color: var(--border-accent);
+}
+
+.preview-btn:hover {
+    background: var(--accent-dim);
+    color: var(--accent-hover);
+}
+
+.preview-panel {
+    border-top: 1px solid rgba(255,255,255,0.06);
+    background: #0a0a0e;
+    animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.preview-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 14px;
+    background: #0d1117;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.preview-panel-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+}
+
+.preview-close-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: color 0.2s;
+}
+
+.preview-close-btn:hover {
+    color: var(--text-primary);
+}
+
+.preview-iframe {
+    width: 100%;
+    height: 320px;
+    border: none;
+    display: block;
+    background: #fff;
 }
 
 .code-block-wrapper pre {

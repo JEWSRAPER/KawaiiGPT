@@ -12,6 +12,10 @@ const noHistory = document.getElementById('noHistory');
 const clearHistoryBtn = document.getElementById('clearHistoryBtn');
 
 const STORAGE_KEY = 'kawaiiGPT_chats';
+const codeStore = {};
+
+const PREVIEW_LANGS = new Set(['html', 'css', 'javascript', 'js', 'typescript', 'ts', 'python', 'py', 'json']);
+const RUN_LANGS = new Set(['html', 'css', 'javascript', 'js']);
 
 let conversationHistory = [];
 let displayMessages = [];
@@ -29,13 +33,21 @@ const renderer = new marked.Renderer();
 renderer.code = function(token) {
     const code = typeof token === 'object' ? (token.text || '') : token;
     const language = (typeof token === 'object' ? token.lang : arguments[1]) || 'plaintext';
-    const lang = language || 'plaintext';
+    const lang = (language || 'plaintext').toLowerCase();
     const id = 'code-' + Math.random().toString(36).substr(2, 9);
+    codeStore[id] = code;
+    const hasPreview = PREVIEW_LANGS.has(lang);
+    const previewBtn = hasPreview
+        ? `<button class="preview-btn" onclick="togglePreview('${id}')">▶ Preview</button>`
+        : '';
     return `
         <div class="code-block-wrapper">
             <div class="code-block-header">
                 <span class="code-lang">${lang}</span>
-                <button class="copy-btn" onclick="copyCode('${id}')">Copy</button>
+                <div class="code-actions">
+                    ${previewBtn}
+                    <button class="copy-btn" onclick="copyCode('${id}')">Copy</button>
+                </div>
             </div>
             <pre><code id="${id}" class="language-${lang}">${escapeHtml(code)}</code></pre>
         </div>
@@ -68,6 +80,123 @@ function copyCode(id) {
             btn.classList.remove('copied');
         }, 2000);
     });
+}
+
+function buildPreviewContent(lang, code) {
+    if (lang === 'html') {
+        return code;
+    }
+    if (lang === 'css') {
+        return `<!DOCTYPE html><html><head><style>
+            body { font-family: sans-serif; padding: 24px; background: #fff; }
+            h1,h2,h3 { margin: 8px 0; } p { margin: 8px 0; }
+            ul { padding-left: 20px; }
+        </style><style>${code}</style></head><body>
+            <h1>Heading 1</h1><h2>Heading 2</h2><h3>Heading 3</h3>
+            <p>Paragraph with <a href="#">a link</a> and <strong>bold</strong> text.</p>
+            <button>Button</button> <input placeholder="Input field">
+            <ul><li>List item one</li><li>List item two</li></ul>
+        </body></html>`;
+    }
+    if (lang === 'javascript' || lang === 'js') {
+        return `<!DOCTYPE html><html><head><style>
+            body { background:#0f0f13; color:#f0f0f5; font-family:monospace; padding:16px; margin:0; }
+            #output { white-space:pre-wrap; font-size:13px; line-height:1.6; }
+            .err { color:#f87171; } .log { color:#f0f0f5; } .info { color:#60a5fa; } .warn { color:#fb923c; }
+            .label { color:#a78bfa; font-size:11px; margin-bottom:8px; }
+        </style></head><body>
+            <div class="label">▶ Console Output</div>
+            <div id="output"></div>
+            <script>
+                const _o = document.getElementById('output');
+                const _fmt = (a) => a.map(x => typeof x === 'object' ? JSON.stringify(x,null,2) : String(x)).join(' ');
+                console.log = (...a) => _o.innerHTML += '<span class="log">'+_fmt(a)+'</span>\\n';
+                console.error = (...a) => _o.innerHTML += '<span class="err">'+_fmt(a)+'</span>\\n';
+                console.info = (...a) => _o.innerHTML += '<span class="info">'+_fmt(a)+'</span>\\n';
+                console.warn = (...a) => _o.innerHTML += '<span class="warn">'+_fmt(a)+'</span>\\n';
+                try { ${code} } catch(e) { _o.innerHTML += '<span class="err">Error: '+e.message+'</span>'; }
+            <\/script>
+        </body></html>`;
+    }
+    if (lang === 'json') {
+        try {
+            const parsed = JSON.parse(code);
+            const formatted = JSON.stringify(parsed, null, 2)
+                .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                .replace(/"([^"]+)":/g, '<span style="color:#a78bfa">"$1"</span>:')
+                .replace(/: "([^"]*)"/g, ': <span style="color:#34d399">"$1"</span>')
+                .replace(/: (-?\d+\.?\d*)/g, ': <span style="color:#fb923c">$1</span>')
+                .replace(/: (true|false)/g, ': <span style="color:#60a5fa">$1</span>')
+                .replace(/: (null)/g, ': <span style="color:#94a3b8">$1</span>');
+            return `<!DOCTYPE html><html><head><style>
+                body{background:#0f0f13;color:#f0f0f5;font-family:monospace;padding:16px;margin:0;font-size:13px;line-height:1.6;}
+                .label{color:#a78bfa;font-size:11px;margin-bottom:8px;}
+            </style></head><body><div class="label">▶ JSON Preview</div><pre>${formatted}</pre></body></html>`;
+        } catch (e) {
+            return `<!DOCTYPE html><html><body style="background:#0f0f13;color:#f87171;padding:16px;font-family:monospace;">Invalid JSON: ${e.message}</body></html>`;
+        }
+    }
+    if (lang === 'python' || lang === 'py') {
+        return `<!DOCTYPE html><html><head><style>
+            body{background:#0f0f13;color:#f0f0f5;font-family:monospace;padding:16px;margin:0;font-size:13px;line-height:1.6;}
+            .note{color:#a78bfa;font-size:11px;padding:8px 12px;border:1px solid rgba(167,139,250,0.3);border-radius:6px;margin-bottom:12px;}
+            pre{margin:0;white-space:pre-wrap;}
+        </style></head><body>
+            <div class="note">⚠ Python runs server-side — showing read-only preview</div>
+            <pre>${escapeHtml(code)}</pre>
+        </body></html>`;
+    }
+    if (lang === 'typescript' || lang === 'ts') {
+        return `<!DOCTYPE html><html><head><style>
+            body{background:#0f0f13;color:#f0f0f5;font-family:monospace;padding:16px;margin:0;font-size:13px;line-height:1.6;}
+            .note{color:#60a5fa;font-size:11px;padding:8px 12px;border:1px solid rgba(96,165,250,0.3);border-radius:6px;margin-bottom:12px;}
+            pre{margin:0;white-space:pre-wrap;}
+        </style></head><body>
+            <div class="note">⚠ TypeScript requires compilation — showing read-only preview</div>
+            <pre>${escapeHtml(code)}</pre>
+        </body></html>`;
+    }
+    return `<!DOCTYPE html><html><body style="background:#0f0f13;color:#f0f0f5;padding:16px;font-family:monospace;">${escapeHtml(code)}</body></html>`;
+}
+
+function togglePreview(id) {
+    const codeEl = document.getElementById(id);
+    if (!codeEl) return;
+    const wrapper = codeEl.closest('.code-block-wrapper');
+    const existing = wrapper.querySelector('.preview-panel');
+    const btn = wrapper.querySelector('.preview-btn');
+
+    if (existing) {
+        const isHidden = existing.style.display === 'none';
+        existing.style.display = isHidden ? 'block' : 'none';
+        btn.textContent = isHidden ? '▼ Hide' : '▶ Preview';
+        return;
+    }
+
+    const lang = codeEl.className.replace('language-', '').toLowerCase();
+    const code = codeStore[id] || codeEl.innerText;
+    const content = buildPreviewContent(lang, code);
+
+    const panel = document.createElement('div');
+    panel.className = 'preview-panel';
+
+    const panelHeader = document.createElement('div');
+    panelHeader.className = 'preview-panel-header';
+    panelHeader.innerHTML = `
+        <span class="preview-panel-title">Preview · ${lang.toUpperCase()}</span>
+        <button class="preview-close-btn" onclick="togglePreview('${id}')">✕ Close</button>
+    `;
+
+    const iframe = document.createElement('iframe');
+    iframe.className = 'preview-iframe';
+    iframe.sandbox = 'allow-scripts';
+    iframe.srcdoc = content;
+
+    panel.appendChild(panelHeader);
+    panel.appendChild(iframe);
+    wrapper.appendChild(panel);
+
+    btn.textContent = '▼ Hide';
 }
 
 function renderMarkdown(text) {
