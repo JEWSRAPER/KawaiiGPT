@@ -1,0 +1,30 @@
+{
+  "name": "kawaiiGPT",
+  "version": "1.0.0",
+  "description": "A kawaii-themed AI chatbot and code writing assistant powered by Mistral and Flask.",
+  "main": "app.py",
+  "scripts": {
+    "start": "python3 app.py",
+    "dev": "python3 app.py"
+  },
+  "keywords": [
+    "ai",
+    "chatbot",
+    "mistral",
+    "flask",
+    "code-writer",
+    "streaming"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "highlight.js": "11.9.0",
+    "marked": "9.1.6"
+  },
+  "engines": {
+    "python": ">=3.8",
+    "node": ">=16"
+  },
+  "repository": {
+    "type": "git"
+  }
+}
