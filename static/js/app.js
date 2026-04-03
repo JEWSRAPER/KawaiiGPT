@@ -189,7 +189,6 @@ function togglePreview(id) {
 
     const iframe = document.createElement('iframe');
     iframe.className = 'preview-iframe';
-    iframe.sandbox = 'allow-scripts';
     iframe.srcdoc = content;
 
     panel.appendChild(panelHeader);
