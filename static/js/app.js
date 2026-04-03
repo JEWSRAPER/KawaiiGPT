@@ -7,10 +7,17 @@ const welcomeScreen = document.getElementById('welcomeScreen');
 const menuToggle = document.getElementById('menuToggle');
 const sidebar = document.querySelector('.sidebar');
 const chatTitle = document.getElementById('chatTitle');
+const chatHistoryList = document.getElementById('chatHistoryList');
+const noHistory = document.getElementById('noHistory');
+const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+
+const STORAGE_KEY = 'kawaiiGPT_chats';
 
 let conversationHistory = [];
+let displayMessages = [];
 let isStreaming = false;
 let currentMode = 'chat';
+let currentChatId = generateId();
 
 marked.setOptions({
     breaks: true,
@@ -37,6 +44,10 @@ renderer.code = function(token) {
 
 marked.use({ renderer });
 
+function generateId() {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+}
+
 function escapeHtml(text) {
     return text
         .replace(/&/g, '&amp;')
@@ -60,8 +71,7 @@ function copyCode(id) {
 }
 
 function renderMarkdown(text) {
-    const html = marked.parse(text);
-    return html;
+    return marked.parse(text);
 }
 
 function highlightCodeBlocks(container) {
@@ -74,20 +84,139 @@ function formatTime(date) {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function hideWelcome() {
-    if (welcomeScreen && welcomeScreen.parentNode) {
-        welcomeScreen.style.opacity = '0';
-        welcomeScreen.style.transform = 'translateY(-10px)';
-        welcomeScreen.style.transition = 'all 0.3s ease';
-        setTimeout(() => {
-            if (welcomeScreen.parentNode) {
-                welcomeScreen.parentNode.removeChild(welcomeScreen);
+function formatTimeAgo(timestamp) {
+    const diff = Date.now() - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return new Date(timestamp).toLocaleDateString();
+}
+
+function getChats() {
+    try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    } catch {
+        return [];
+    }
+}
+
+function saveChats(chats) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(chats));
+}
+
+function saveCurrentChat() {
+    if (conversationHistory.length === 0) return;
+    const chats = getChats();
+    const title = chatTitle.textContent || 'New Chat';
+    const idx = chats.findIndex(c => c.id === currentChatId);
+    const chatData = {
+        id: currentChatId,
+        title,
+        timestamp: Date.now(),
+        messages: conversationHistory,
+        displayMessages
+    };
+    if (idx >= 0) {
+        chats[idx] = chatData;
+    } else {
+        chats.unshift(chatData);
+    }
+    saveChats(chats.slice(0, 50));
+    renderHistoryList();
+}
+
+function renderHistoryList() {
+    chatHistoryList.querySelectorAll('.history-item').forEach(el => el.remove());
+    const chats = getChats();
+    if (chats.length === 0) {
+        noHistory.style.display = 'block';
+        return;
+    }
+    noHistory.style.display = 'none';
+    chats.forEach(chat => {
+        const item = document.createElement('div');
+        item.className = 'history-item' + (chat.id === currentChatId ? ' active' : '');
+        item.innerHTML = `
+            <span class="history-item-icon">💬</span>
+            <div class="history-item-info">
+                <span class="history-item-title">${escapeHtml(chat.title)}</span>
+                <span class="history-item-time">${formatTimeAgo(chat.timestamp)}</span>
+            </div>
+            <button class="history-delete-btn" title="Delete">×</button>
+        `;
+        item.addEventListener('click', (e) => {
+            if (!e.target.classList.contains('history-delete-btn')) {
+                loadChat(chat.id);
             }
+        });
+        item.querySelector('.history-delete-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteChat(chat.id);
+        });
+        chatHistoryList.appendChild(item);
+    });
+}
+
+function loadChat(id) {
+    const chats = getChats();
+    const chat = chats.find(c => c.id === id);
+    if (!chat) return;
+    if (conversationHistory.length > 0 && currentChatId !== id) {
+        saveCurrentChat();
+    }
+    currentChatId = id;
+    conversationHistory = chat.messages || [];
+    displayMessages = chat.displayMessages || [];
+    chatTitle.textContent = chat.title || 'KawaiiGPT';
+    messagesContainer.innerHTML = '';
+    displayMessages.forEach(msg => {
+        addMessage(msg.role, msg.content);
+    });
+    renderHistoryList();
+    scrollToBottom();
+    if (sidebar.classList.contains('open')) {
+        sidebar.classList.remove('open');
+    }
+}
+
+function deleteChat(id) {
+    const chats = getChats().filter(c => c.id !== id);
+    saveChats(chats);
+    if (currentChatId === id) {
+        startNewChat();
+    } else {
+        renderHistoryList();
+    }
+}
+
+function startNewChat() {
+    if (conversationHistory.length > 0) {
+        saveCurrentChat();
+    }
+    currentChatId = generateId();
+    conversationHistory = [];
+    displayMessages = [];
+    clearChatUI();
+    renderHistoryList();
+}
+
+function hideWelcome() {
+    const ws = document.getElementById('welcomeScreen');
+    if (ws && ws.parentNode) {
+        ws.style.opacity = '0';
+        ws.style.transform = 'translateY(-10px)';
+        ws.style.transition = 'all 0.3s ease';
+        setTimeout(() => {
+            if (ws.parentNode) ws.parentNode.removeChild(ws);
         }, 300);
     }
 }
 
-function addMessage(role, content, isStreaming = false) {
+function addMessage(role, content) {
     hideWelcome();
 
     const msgDiv = document.createElement('div');
@@ -177,6 +306,7 @@ async function sendMessage(text) {
     const userText = getModePrefix() + text;
 
     conversationHistory.push({ role: 'user', content: userText });
+    displayMessages.push({ role: 'user', content: text });
     addMessage('user', text);
     showTypingIndicator();
 
@@ -210,25 +340,31 @@ async function sendMessage(text) {
         }
 
         conversationHistory.push({ role: 'assistant', content: fullText });
+        displayMessages.push({ role: 'bot', content: fullText });
 
         if (conversationHistory.length === 2) {
             const title = text.length > 40 ? text.substring(0, 40) + '...' : text;
             chatTitle.textContent = title;
         }
 
+        saveCurrentChat();
+
     } catch (error) {
         removeTypingIndicator();
-        addMessage('bot', `Sorry, I ran into an error: ${error.message}. Please try again.`);
+        const errMsg = `Sorry, I ran into an error: ${error.message}. Please try again.`;
+        addMessage('bot', errMsg);
+        displayMessages.push({ role: 'bot', content: errMsg });
     } finally {
         isStreaming = false;
         sendBtn.disabled = userInput.value.trim() === '';
     }
 }
 
-function clearChat() {
+function clearChatUI() {
     conversationHistory = [];
-    messagesContainer.innerHTML = '';
+    displayMessages = [];
     chatTitle.textContent = 'KawaiiGPT';
+    messagesContainer.innerHTML = '';
 
     const welcome = document.createElement('div');
     welcome.className = 'welcome-screen';
@@ -274,13 +410,22 @@ userInput.addEventListener('keydown', (e) => {
 userInput.addEventListener('input', autoResize);
 
 newChatBtn.addEventListener('click', () => {
-    clearChat();
+    startNewChat();
     if (sidebar.classList.contains('open')) {
         sidebar.classList.remove('open');
     }
 });
 
-clearBtn.addEventListener('click', clearChat);
+clearBtn.addEventListener('click', startNewChat);
+
+clearHistoryBtn.addEventListener('click', () => {
+    saveChats([]);
+    currentChatId = generateId();
+    conversationHistory = [];
+    displayMessages = [];
+    clearChatUI();
+    renderHistoryList();
+});
 
 menuToggle.addEventListener('click', () => {
     sidebar.classList.toggle('open');
@@ -314,4 +459,5 @@ document.querySelectorAll('.quick-prompt-btn').forEach(btn => {
     });
 });
 
+renderHistoryList();
 userInput.focus();
