@@ -459,6 +459,9 @@ function addMessage(role, content) {
 }
 
 function showTypingIndicator() {
+    // ensure only one typing indicator exists
+    removeTypingIndicator();
+
     const indicator = document.createElement('div');
     indicator.className = 'typing-indicator';
     indicator.id = 'typingIndicator';
@@ -471,8 +474,13 @@ function showTypingIndicator() {
     dots.className = 'typing-dots';
     dots.innerHTML = '<span></span><span></span><span></span>';
 
+    const text = document.createElement('div');
+    text.className = 'typing-text';
+    text.textContent = 'Thinking...';
+
     indicator.appendChild(avatar);
     indicator.appendChild(dots);
+    indicator.appendChild(text);
     messagesContainer.appendChild(indicator);
     scrollToBottom();
 }
