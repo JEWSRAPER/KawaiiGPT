@@ -3,7 +3,7 @@ from flask import Flask, render_template, request, jsonify, Response, stream_wit
 from openai import OpenAI
 
 app = Flask(__name__)
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+client = OpenAI(api_key=os.environ.get("XAI_API_KEY"), base_url="https://api.x.ai/v1")
 
 SYSTEM_PROMPT = """You are KawaiiGPT, a friendly and helpful AI assistant with a cute personality. You are also an expert code writer.
 
@@ -35,7 +35,7 @@ def chat():
     def generate():
         try:
             stream = client.chat.completions.create(
-                model="gpt-4o",
+                model="grok-3",
                 messages=full_messages,
                 stream=True,
                 max_tokens=4096
