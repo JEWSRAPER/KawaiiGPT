@@ -52,7 +52,12 @@ def chat():
         except Exception as e:
             yield f"\n\n[Error: {str(e)}]"
 
-    return Response(stream_with_context(generate()), mimetype="text/plain")
+    # Disable upstream buffering where possible and ensure chunked stream
+    headers = {
+        "X-Accel-Buffering": "no",
+        "Cache-Control": "no-cache"
+    }
+    return Response(stream_with_context(generate()), mimetype="text/plain; charset=utf-8", headers=headers)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)

@@ -245,6 +245,7 @@ async function retryLastResponse(msgDiv) {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let fullText = '';
+        let chunkCount = 0;
 
         // create a placeholder bot message so the UI shows progress
         const { bubble, contentDiv } = addMessage('bot', 'Thinking...');
@@ -255,6 +256,7 @@ async function retryLastResponse(msgDiv) {
             const { done, value } = await reader.read();
             if (done) break;
             const chunk = decoder.decode(value, { stream: true });
+            chunkCount += 1;
             fullText += chunk;
             if (firstChunk) {
                 // remove the typing indicator once the first token arrives
@@ -267,6 +269,11 @@ async function retryLastResponse(msgDiv) {
         }
 
         if (firstChunk) removeTypingIndicator();
+
+        // If the server returned a single large chunk, animate reveal to feel like typing
+        if (chunkCount <= 1 && fullText.length > 0) {
+            animateReveal(bubble, fullText);
+        }
 
         conversationHistory.push({ role: 'assistant', content: fullText });
         displayMessages.push({ role: 'bot', content: fullText });
@@ -293,6 +300,20 @@ function highlightCodeBlocks(container) {
     container.querySelectorAll('pre code').forEach(block => {
         hljs.highlightElement(block);
     });
+}
+
+function animateReveal(bubble, text, speed = 20) {
+    // Reveal text progressively to simulate typing when streaming isn't incremental
+    bubble.innerHTML = '';
+    let i = 0;
+    const step = 1;
+    const t = setInterval(() => {
+        i += step;
+        bubble.innerHTML = renderMarkdown(text.slice(0, i));
+        highlightCodeBlocks(bubble);
+        scrollToBottom();
+        if (i >= text.length) clearInterval(t);
+    }, speed);
 }
 
 function formatTime(date) {
@@ -548,6 +569,7 @@ async function sendMessage(text) {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let fullText = '';
+        let chunkCount = 0;
 
         // create a placeholder bot message so the UI shows progress
         const { bubble, contentDiv } = addMessage('bot', 'Thinking...');
@@ -558,6 +580,7 @@ async function sendMessage(text) {
             if (done) break;
 
             const chunk = decoder.decode(value, { stream: true });
+            chunkCount += 1;
             fullText += chunk;
             if (firstChunk) {
                 removeTypingIndicator();
@@ -570,6 +593,10 @@ async function sendMessage(text) {
         }
 
         if (firstChunk) removeTypingIndicator();
+
+        if (chunkCount <= 1 && fullText.length > 0) {
+            animateReveal(bubble, fullText);
+        }
 
         conversationHistory.push({ role: 'assistant', content: fullText });
         displayMessages.push({ role: 'bot', content: fullText });
