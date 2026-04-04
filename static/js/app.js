@@ -22,6 +22,10 @@ let displayMessages = [];
 let isStreaming = false;
 let currentMode = 'chat';
 let currentChatId = generateId();
+// Message queue for sends initiated while a response is streaming
+let messageQueue = [];
+let editingQueueId = null;
+const originalSendBtnHTML = sendBtn ? sendBtn.innerHTML : null;
 
 marked.setOptions({
     breaks: true,
@@ -87,6 +91,82 @@ function copyCode(id) {
             btn.classList.remove('copied');
         }, 2000);
     });
+}
+
+function enqueueMessage(text) {
+    const id = 'queued-' + generateId();
+    const item = { id, text, ts: Date.now() };
+    messageQueue.push(item);
+    renderQueueUI();
+    return item;
+}
+
+function renderQueueUI() {
+    const container = document.getElementById('queuedList');
+    if (!container) return;
+    container.innerHTML = '';
+    if (messageQueue.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+    container.style.display = 'flex';
+    messageQueue.forEach((q) => {
+        const el = document.createElement('div');
+        el.className = 'queued-item';
+        el.id = q.id;
+        const textEl = document.createElement('div');
+        textEl.className = 'queued-text';
+        textEl.title = q.text;
+        textEl.textContent = q.text.length > 120 ? q.text.slice(0, 120) + '...' : q.text;
+
+        const actions = document.createElement('div');
+        actions.className = 'queued-actions';
+
+        const editBtn = document.createElement('button');
+        editBtn.className = 'queued-edit-btn';
+        editBtn.textContent = 'Edit';
+        editBtn.addEventListener('click', () => editQueued(q.id));
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'queued-remove-btn';
+        removeBtn.textContent = 'Remove';
+        removeBtn.addEventListener('click', () => removeQueued(q.id));
+
+        actions.appendChild(editBtn);
+        actions.appendChild(removeBtn);
+
+        el.appendChild(textEl);
+        el.appendChild(actions);
+        container.appendChild(el);
+    });
+}
+
+function editQueued(id) {
+    const q = messageQueue.find(x => x.id === id);
+    if (!q) return;
+    editingQueueId = id;
+    userInput.value = q.text;
+    userInput.focus();
+    autoResize();
+    if (originalSendBtnHTML) sendBtn.innerHTML = 'Update';
+    sendBtn.dataset.mode = 'update';
+}
+
+function removeQueued(id) {
+    messageQueue = messageQueue.filter(x => x.id !== id);
+    renderQueueUI();
+}
+
+function processQueue() {
+    if (isStreaming) return;
+    if (messageQueue.length === 0) {
+        renderQueueUI();
+        return;
+    }
+    const next = messageQueue.shift();
+    renderQueueUI();
+    // small delay to allow UI updates/animations
+    setTimeout(() => sendMessage(next.text), 120);
 }
 
 function buildPreviewContent(lang, code) {
@@ -311,6 +391,9 @@ async function retryLastResponse(msgDiv) {
     } finally {
         isStreaming = false;
         sendBtn.disabled = userInput.value.trim() === '';
+        if (messageQueue.length > 0) {
+            setTimeout(processQueue, 150);
+        }
     }
 }
 
@@ -325,17 +408,27 @@ function highlightCodeBlocks(container) {
 }
 
 function animateReveal(bubble, text, speed = 20) {
-    // Reveal text progressively to simulate typing when streaming isn't incremental
+    // Faster progressive reveal: adapt steps to text length so large responses reveal quickly
     bubble.innerHTML = '';
+    if (!text) return;
+    const minDuration = 120; // ms
+    const maxDuration = 2000; // ms
+    let targetDuration = 500; // default target reveal duration
+    targetDuration = Math.max(minDuration, Math.min(maxDuration, targetDuration));
+    const frameMs = 16; // ~60fps
+    const steps = Math.max(2, Math.round(targetDuration / frameMs));
+    const stepSize = Math.max(1, Math.ceil(text.length / steps));
     let i = 0;
-    const step = 1;
+    const totalSteps = Math.ceil(text.length / stepSize);
+    const interval = Math.max(8, Math.round(targetDuration / totalSteps));
     const t = setInterval(() => {
-        i += step;
+        i += stepSize;
+        if (i > text.length) i = text.length;
         bubble.innerHTML = renderMarkdown(text.slice(0, i));
         highlightCodeBlocks(bubble);
         scrollToBottom();
         if (i >= text.length) clearInterval(t);
-    }, speed);
+    }, interval);
 }
 
 function formatTime(date) {
@@ -646,6 +739,9 @@ async function sendMessage(text) {
     } finally {
         isStreaming = false;
         sendBtn.disabled = userInput.value.trim() === '';
+        if (messageQueue.length > 0) {
+            setTimeout(processQueue, 150);
+        }
     }
 }
 
@@ -685,14 +781,58 @@ function clearChatUI() {
 
 sendBtn.addEventListener('click', () => {
     const text = userInput.value.trim();
-    if (text) sendMessage(text);
+    if (!text) return;
+    // If we're editing a queued message, update it instead of sending
+    if (editingQueueId) {
+        const q = messageQueue.find(x => x.id === editingQueueId);
+        if (q) {
+            q.text = text;
+            renderQueueUI();
+        }
+        editingQueueId = null;
+        sendBtn.dataset.mode = '';
+        if (originalSendBtnHTML) sendBtn.innerHTML = originalSendBtnHTML;
+        userInput.value = '';
+        autoResize();
+        return;
+    }
+
+    // If a response is currently streaming, enqueue instead of sending immediately
+    if (isStreaming) {
+        enqueueMessage(text);
+        userInput.value = '';
+        autoResize();
+        return;
+    }
+
+    sendMessage(text);
 });
 
 userInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         const text = userInput.value.trim();
-        if (text) sendMessage(text);
+        if (!text) return;
+        if (editingQueueId) {
+            const q = messageQueue.find(x => x.id === editingQueueId);
+            if (q) {
+                q.text = text;
+                renderQueueUI();
+            }
+            editingQueueId = null;
+            sendBtn.dataset.mode = '';
+            if (originalSendBtnHTML) sendBtn.innerHTML = originalSendBtnHTML;
+            userInput.value = '';
+            autoResize();
+            return;
+        }
+        if (isStreaming) {
+            enqueueMessage(text);
+            userInput.value = '';
+            autoResize();
+            return;
+        }
+        sendMessage(text);
     }
 });
 
@@ -749,4 +889,5 @@ document.querySelectorAll('.quick-prompt-btn').forEach(btn => {
 });
 
 renderHistoryList();
+renderQueueUI();
 userInput.focus();

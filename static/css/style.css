@@ -747,6 +747,55 @@ textarea#userInput::-webkit-scrollbar-thumb {
     font-family: inherit;
 }
 
+/* ── Queued messages UI ── */
+.queued-list {
+    margin-bottom: 10px;
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.queued-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: space-between;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 8px 10px;
+    border-radius: 10px;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.queued-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.queued-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.queued-edit-btn, .queued-remove-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 6px 8px;
+    cursor: pointer;
+}
+
+.queued-edit-btn:hover, .queued-remove-btn:hover {
+    background: var(--bg-card);
+    border-color: var(--border-accent);
+    color: var(--accent);
+}
+
 /* ── Message actions (retry etc.) ── */
 .message-actions {
     display: flex;
